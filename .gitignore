@@ -22,7 +22,9 @@
 *.cfg
 !setup.cfg
 !cfg/yolov3*.cfg
-
+card_images
+classified_images
+augmented_images
 storage.googleapis.com
 runs/*
 data/*
