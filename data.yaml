@@ -1,0 +1,5 @@
+train: classified_images/train
+val: classified_images/val
+
+nc: 1  # Number of classes for object detection (e.g., 1 for 'card')
+names: ['card']

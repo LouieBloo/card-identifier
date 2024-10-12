@@ -13,7 +13,8 @@ Models:     https://github.com/ultralytics/yolov5/tree/master/models
 Datasets:   https://github.com/ultralytics/yolov5/tree/master/data
 Tutorial:   https://docs.ultralytics.com/yolov5/tutorials/train_custom_data
 """
-
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
 import argparse
 import math
 import os
