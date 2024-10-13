@@ -1,5 +1,5 @@
-train: classified_images/train
-val: classified_images/val
+train: card_finder_training_data/train
+val: card_finder_training_data/valid
 
 nc: 1  # Number of classes for object detection (e.g., 1 for 'card')
 names: ['card']

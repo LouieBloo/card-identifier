@@ -585,40 +585,14 @@ class LoadImagesAndLabels(Dataset):
                         # f += [p.parent / x.lstrip(os.sep) for x in t]  # to global path (pathlib)
                 else:
                     raise FileNotFoundError(f"{prefix}{p} does not exist")
-                
-            #self.im_files = sorted(x.replace("/", os.sep) for x in f if x.split(".")[-1].lower() in IMG_FORMATS)
-            def get_image_files(path, num_images_per_class=5):
-                image_extensions = ('.jpg', '.jpeg', '.png', '.bmp')  # Add other extensions if needed
-                image_files = []
-                for class_dir in Path(path).iterdir():
-                    if class_dir.is_dir():
-                        # Get all image files in the class directory
-                        class_images = [p for p in class_dir.glob('*') if p.suffix.lower() in image_extensions]
-                        # Randomly select a subset of images from the class
-                        if len(class_images) > num_images_per_class:
-                            class_images = random.sample(class_images, num_images_per_class)
-                        else:
-                            class_images = class_images  # Use all images if fewer than desired
-                        # Add the selected images to the list
-                        image_files.extend([str(p) for p in class_images])
-                return image_files
-
-            # Use the modified function to get image files
-            self.im_files = get_image_files(path, num_images_per_class=1)
-
+            self.im_files = sorted(x.replace("/", os.sep) for x in f if x.split(".")[-1].lower() in IMG_FORMATS)
             # self.img_files = sorted([x for x in f if x.suffix[1:].lower() in IMG_FORMATS])  # pathlib
             assert self.im_files, f"{prefix}No images found"
         except Exception as e:
             raise Exception(f"{prefix}Error loading data from {path}: {e}\n{HELP_URL}") from e
 
         # Check cache
-        #self.label_files = img2label_paths(self.im_files)  # labels
-        label_dir = 'annotations'  # Update this to your annotations directory
-
-        self.label_files = [os.path.join(label_dir, Path(f).stem + '.txt') for f in self.im_files]
-
-
-
+        self.label_files = img2label_paths(self.im_files)  # labels
         cache_path = (p if p.is_file() else Path(self.label_files[0]).parent).with_suffix(".cache")
         try:
             cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict

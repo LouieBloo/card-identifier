@@ -28,8 +28,8 @@ from torchvision.datasets import ImageFolder
 from torchvision import transforms
 import json
 
-yolo5ModelName='runs/train/exp11/weights/best.pt'
-classifierModelName='efficientnet_card_classifier.pth'
+yolo5ModelName='runs/train/exp13/weights/best.pt'
+classifierModelName='classy_v2.pth'
 
 
 # Load the class-to-index mapping from the JSON file
@@ -58,15 +58,16 @@ yolov5_model = torch.hub.load('ultralytics/yolov5', 'custom', path=yolo5ModelNam
 # classification_model.load_state_dict(torch.load('efficientnet_card_classifier.pth'))
 # classification_model.eval()
 
-# Load the EfficientNet model architecture
-classification_model = EfficientNet.from_name('efficientnet-b0')
-# Modify the final fully connected layer (_fc) to match the number of classes
-classification_model._fc = torch.nn.Linear(in_features=1280, out_features=num_classes)
-# Load the state dict from the saved model
-classification_model.load_state_dict(torch.load(classifierModelName))
-# Set the model to evaluation mode
-classification_model.eval()
-print(f"Model loaded successfully with {num_classes} output classes.")
+if True:
+    # Load the EfficientNet model architecture
+    classification_model = EfficientNet.from_name('efficientnet-b0')
+    # Modify the final fully connected layer (_fc) to match the number of classes
+    classification_model._fc = torch.nn.Linear(in_features=1280, out_features=num_classes)
+    # Load the state dict from the saved model
+    classification_model.load_state_dict(torch.load(classifierModelName))
+    # Set the model to evaluation mode
+    classification_model.eval()
+    print(f"Model loaded successfully with {num_classes} output classes.")
 
 # Scryfall endpoint
 SCRYFALL_API_URL = 'https://api.scryfall.com/cards/named'
@@ -86,12 +87,16 @@ def find_closest_box(detections, click_x, click_y):
     return closest_box
 
 # Helper function to fetch Scryfall card details
-def fetch_card_details_by_id(card_id: str):
-    response = requests.get(f"https://api.scryfall.com/cards/{card_id}")
+def fetch_card_details_by_id(oracle_id: str):
+    response = requests.get(f"https://api.scryfall.com/cards/search?q=oracleid:{oracle_id}")
     if response.status_code == 200:
-        return response.json()
+        data = response.json()
+        if data['total_cards'] > 0:
+            return data['data'][0]  # Return the first result
+        else:
+            return {"error": "No card found with this Oracle ID"}
     else:
-        return {"error": "Card not found"}
+        return {"error": "Failed to fetch card details"}
 
 # Request model for click coordinates
 class ClickLocation(BaseModel):
@@ -104,7 +109,9 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
     # Read image from the uploaded file
     image_data = await file.read()
     image = Image.open(BytesIO(image_data))
+    width, height = image.size
     image = np.array(image)
+    
 
     # Step 1: Use YOLOv5 model to detect cards in the image
     results = yolov5_model(image)
@@ -124,7 +131,7 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
 
     # Step 2: Find the closest bounding box to the user's click location
     if x and y:
-        closest_box = find_closest_box(detections, x, y)
+        closest_box = find_closest_box(detections, x*width, y*height)
         if closest_box is None:
             return {"error": "No card detected near click location"}
     else:
@@ -143,10 +150,9 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
 
     cv2.imwrite('cropped_card_image.jpg', cv2.cvtColor(card_image, cv2.COLOR_RGB2BGR))  # Save as JPEG
 
-
     # Step 3: Preprocess the extracted card image and run it through your classification model
     # Resize and normalize the image for EfficientNet (assuming 224x224 input size)
-    #card_image = cv2.resize(card_image, (224, 224))  # Example size, adjust as necessary
+    card_image = cv2.resize(card_image, (224, 224))  # Example size, adjust as necessary
 
     # Define the preprocessing pipeline
     preprocess = transforms.Compose([
@@ -177,7 +183,7 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
 
     if predicted_scryfall_id is None:
         return {"error": "Predicted class index not mapped to any Scryfall ID"}
-    
+
     # Step 4: Fetch card details from Scryfall
     scryfall_data = fetch_card_details_by_id(predicted_scryfall_id)
 

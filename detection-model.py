@@ -12,7 +12,7 @@ output_model_name = 'classy_v2.pth'
 
 # Initialize variables
 start_epoch = 0
-num_epochs = 10  # Total number of epochs you want to train
+num_epochs = 4  # Total number of epochs you want to train
 
 train_transforms = transforms.Compose([
     transforms.Resize((224, 224)),

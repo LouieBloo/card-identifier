@@ -1,5 +1,5 @@
-uvicorn main:app --reload
-python train.py --img 680 --batch 32 --epochs 5 --data data.yaml --weights yolov5s.pt
+uvicorn classifier:app --reload
+python train.py --img 640 --batch 32 --epochs 5 --data data.yaml --weights yolov5s.pt
 
 
 
