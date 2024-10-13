@@ -587,11 +587,24 @@ class LoadImagesAndLabels(Dataset):
                     raise FileNotFoundError(f"{prefix}{p} does not exist")
                 
             #self.im_files = sorted(x.replace("/", os.sep) for x in f if x.split(".")[-1].lower() in IMG_FORMATS)
-            def get_image_files(path):
+            def get_image_files(path, num_images_per_class=5):
                 image_extensions = ('.jpg', '.jpeg', '.png', '.bmp')  # Add other extensions if needed
-                return [str(p) for p in Path(path).rglob('*') if p.suffix.lower() in image_extensions]
+                image_files = []
+                for class_dir in Path(path).iterdir():
+                    if class_dir.is_dir():
+                        # Get all image files in the class directory
+                        class_images = [p for p in class_dir.glob('*') if p.suffix.lower() in image_extensions]
+                        # Randomly select a subset of images from the class
+                        if len(class_images) > num_images_per_class:
+                            class_images = random.sample(class_images, num_images_per_class)
+                        else:
+                            class_images = class_images  # Use all images if fewer than desired
+                        # Add the selected images to the list
+                        image_files.extend([str(p) for p in class_images])
+                return image_files
 
-            self.im_files = get_image_files(path)
+            # Use the modified function to get image files
+            self.im_files = get_image_files(path, num_images_per_class=1)
 
             # self.img_files = sorted([x for x in f if x.suffix[1:].lower() in IMG_FORMATS])  # pathlib
             assert self.im_files, f"{prefix}No images found"

@@ -8,10 +8,15 @@ from tqdm import tqdm
 import os
 # Define the path to save checkpoints
 checkpoint_path = 'model_checkpoint.pth'
+output_model_name = 'classy_v2.pth'
+
+# Initialize variables
+start_epoch = 0
+num_epochs = 10  # Total number of epochs you want to train
 
 train_transforms = transforms.Compose([
     transforms.Resize((224, 224)),
-    transforms.RandomHorizontalFlip(),
+    #transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406],
                          [0.229, 0.224, 0.225])
@@ -34,11 +39,6 @@ model = model.cuda()
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-
-# Initialize variables
-start_epoch = 0
-num_epochs = 10  # Total number of epochs you want to train
 
 # Check if a checkpoint exists
 if os.path.isfile(checkpoint_path):
@@ -115,5 +115,5 @@ for epoch in range(start_epoch, num_epochs):
     print(f"Checkpoint saved at epoch {epoch+1}")
 
 print("saving model...")
-torch.save(model.state_dict(), 'efficientnet_card_classifier.pth')
+torch.save(model.state_dict(), output_model_name)
 print("Training complete.")

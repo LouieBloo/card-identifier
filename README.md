@@ -1,3 +1,8 @@
+uvicorn main:app --reload
+python train.py --img 680 --batch 32 --epochs 5 --data data.yaml --weights yolov5s.pt
+
+
+
 <div align="center">
   <p>
     <a href="https://www.ultralytics.com/events/yolovision" target="_blank">
