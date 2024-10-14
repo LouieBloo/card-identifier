@@ -6,13 +6,15 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 import os
+from collections import Counter
+
 # Define the path to save checkpoints
 checkpoint_path = 'model_checkpoint.pth'
-output_model_name = 'classy_v2.pth'
+output_model_name = 'magic_card_classifier_v3.pth'
 
 # Initialize variables
 start_epoch = 0
-num_epochs = 4  # Total number of epochs you want to train
+num_epochs = 10  # Total number of epochs you want to train
 
 train_transforms = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -23,21 +25,32 @@ train_transforms = transforms.Compose([
 ])
 
 train_dataset = datasets.ImageFolder('classified_images/train', transform=train_transforms)
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
 
 val_dataset = datasets.ImageFolder('classified_images/val', transform=train_transforms)
-val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
 
 num_classes = len(train_dataset.classes)
 
 print(f'Class Amount: {num_classes}')
 
+# Compute class counts
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+targets = [s[1] for s in train_dataset.samples]
+class_counts = Counter(targets)
+total_samples = len(train_dataset)
+class_weights = [total_samples / (num_classes * class_counts[i]) for i in range(num_classes)]
+class_weights = torch.tensor(class_weights).to(device)
+
+
 model = EfficientNet.from_pretrained('efficientnet-b0')
 model._fc = torch.nn.Linear(model._fc.in_features, num_classes)
 model = model.cuda()
+model = model.to(device)
 
-
-criterion = nn.CrossEntropyLoss()
+#criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(weight=class_weights)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # Check if a checkpoint exists
@@ -52,8 +65,8 @@ else:
     print("No checkpoint found, starting training from scratch.")
 
 # Move model to GPU if available
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model.to(device)
+#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#model.to(device)
 
 # Optionally, initialize scaler for mixed precision training
 scaler = torch.amp.GradScaler('cuda')

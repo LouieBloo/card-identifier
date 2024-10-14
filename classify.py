@@ -1,17 +1,3 @@
-
-
-# Load the detection model
-# detection_model = torch.hub.load('ultralytics/yolov5', 'custom', path='best.pt')
-# detection_model.eval()
-
-# # Load the classification model
-# num_classes = len(train_dataset.classes)
-# classification_model = EfficientNet.from_name('efficientnet-b0')
-# classification_model._fc = torch.nn.Linear(classification_model._fc.in_features, num_classes)
-# classification_model.load_state_dict(torch.load('efficientnet_card_classifier.pth'))
-# classification_model = classification_model.cuda()
-# classification_model.eval()
-# python train.py --img 680 --batch 64 --epochs 5 --data data.yaml --weights yolov5s.pt
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -28,8 +14,8 @@ from torchvision.datasets import ImageFolder
 from torchvision import transforms
 import json
 
-yolo5ModelName='runs/train/exp13/weights/best.pt'
-classifierModelName='classy_v2.pth'
+yolo5ModelName='runs/train/exp15/weights/best.pt'
+classifierModelName='magic_card_classifier_v3.pth'
 
 
 # Load the class-to-index mapping from the JSON file

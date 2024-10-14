@@ -73,15 +73,28 @@ def augment_images(input_dir='card_images', output_dir='augmented_images', num_a
     #     A.Blur(blur_limit=(3,11), p=0.75)
     # ])
 
+    # transform = A.Compose([
+    #     A.Resize(width=488, height=680),
+    #     A.RandomBrightnessContrast(p=0.5),
+    #     A.MotionBlur(blur_limit=5, p=0.5),
+    #     A.GaussNoise(var_limit=(10.0, 50.0), p=0.5),
+    #     # A.Rotate(limit=90, p=0.3),
+    #     A.Blur(blur_limit=(3,11), p=0.75)
+    # ])
+
     transform = A.Compose([
-        A.Resize(width=488, height=680),
-        A.RandomBrightnessContrast(p=0.5),
-        A.MotionBlur(blur_limit=5, p=0.5),
-        A.GaussNoise(var_limit=(10.0, 50.0), p=0.5),
-        # A.Rotate(limit=90, p=0.3),
-        A.Blur(blur_limit=(3,11), p=0.75)
+        A.Resize(width=488, height=680),  # Resize to a fixed size for consistency
+        A.ShiftScaleRotate(shift_limit=0.2, scale_limit=0.5, rotate_limit=0, p=0.7, border_mode=cv2.BORDER_CONSTANT),  # Shift and scale the card
+        A.PadIfNeeded(min_height=640, min_width=640, border_mode=0, value=(114, 114, 114), p=0.5),  # Add padding around the card
+        A.RandomResizedCrop(height=640, width=640, scale=(0.5, 1.0), p=0.5),  # Simulate the card being smaller
+        A.RandomBrightnessContrast(p=0.5),  # Brightness and contrast adjustment
+        A.MotionBlur(blur_limit=5, p=0.5),  # Simulate motion blur
+        A.GaussNoise(var_limit=(10.0, 50.0), p=0.5),  # Add some noise
+        A.Blur(blur_limit=(3, 11), p=0.75)  # Apply a blur
     ])
 
+    count = 0
+    total = len(os.listdir(input_dir))
     for filename in os.listdir(input_dir):
         # Save the original image with 'aug_99' appended to the filename
         original_output_filename = f"{os.path.splitext(filename)[0]}_aug_99.jpg"
@@ -98,10 +111,13 @@ def augment_images(input_dir='card_images', output_dir='augmented_images', num_a
                 output_filename = f"{os.path.splitext(filename)[0]}_aug_{i}.jpg"
                 output_path = os.path.join(output_dir, output_filename)
                 cv2.imwrite(output_path, augmented_image)
-                print(f'Saved augmented image {output_filename}')
+                #print(f'Saved augmented image {output_filename}')
 
             cv2.imwrite(original_output_path, image)  # Save original image
-            print(f'Saved original image {original_output_filename}')
+            count = count + 1
+            if count % 100 == 0:
+                print(f'{count}/{total} original files augmented')
+            #print(f'Saved original image {original_output_filename}')
         else:
             print(f'{original_output_path} already exists.')
 
@@ -215,16 +231,16 @@ def move_images(input_dir, output_dir, train_split=0.8):
         for img in train_images:
             src_path = os.path.join(input_dir, img)
             dest_path = os.path.join(train_parent_dir, img)
-            #shutil.move(src_path, dest_path)
-            shutil.copy2(src_path, dest_path)
+            shutil.move(src_path, dest_path)
+            #shutil.copy2(src_path, dest_path)
             print(f'Moved {img} to {train_parent_dir}')
     
         # Move validation images
         for img in val_images:
             src_path = os.path.join(input_dir, img)
             dest_path = os.path.join(val_parent_dir, img)
-            #shutil.move(src_path, dest_path)
-            shutil.copy2(src_path, dest_path)
+            shutil.move(src_path, dest_path)
+            #shutil.copy2(src_path, dest_path)
             print(f'Moved {img} to {val_parent_dir}')
     
     print("Image moving complete.")
@@ -411,14 +427,14 @@ def augment_and_split_images(input_dir='card_images', output_dir='output_data', 
     print("Image splitting complete.")
 
 #download_card_images()
-#augment_images('card_images','augmented_images',2)
+#augment_images('card_images','augmented_images',15)
 #move_images('augmented_images', 'classified_images')
 #generate_annotations()
-#create_mappings()
+create_mappings()
 
-augment_and_split_images(
-    input_dir='card_images',
-    output_dir='classified_images',
-    num_augmented=4,  # Desired number of augmentations per image
-    train_split=0.8    # 80% training, 20% validation
-)
+# augment_and_split_images(
+#     input_dir='card_images',
+#     output_dir='classified_images',
+#     num_augmented=4,  # Desired number of augmentations per image
+#     train_split=0.8    # 80% training, 20% validation
+# )
