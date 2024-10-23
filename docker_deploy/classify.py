@@ -15,8 +15,9 @@ from torchvision import transforms
 import json
 
 yolo5ModelName='best.pt'
-classifierModelName='magic_card_classifier_v3.pth'
+classifierModelName='magic_card_classifier_v4.pth'
 
+print(f"Classifier name: {classifierModelName}")
 
 # Load the class-to-index mapping from the JSON file
 with open('class_to_idx.json', 'r') as f:
@@ -135,7 +136,7 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
         card_image = cv2.cvtColor(card_image, cv2.COLOR_RGBA2RGB)
 
 
-    cv2.imwrite('cropped_card_image.jpg', cv2.cvtColor(card_image, cv2.COLOR_RGB2BGR))  # Save as JPEG
+    #cv2.imwrite('cropped_card_image.jpg', cv2.cvtColor(card_image, cv2.COLOR_RGB2BGR))  # Save as JPEG
 
     # Step 3: Preprocess the extracted card image and run it through your classification model
     # Resize and normalize the image for EfficientNet (assuming 224x224 input size)

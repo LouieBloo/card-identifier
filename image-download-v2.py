@@ -8,7 +8,12 @@ import cv2
 import json
 from torchvision.datasets import ImageFolder
 
-def download_card_images(output_dir='card_images'):
+card_images_folder='/mnt/e/Photos/TableStream/card_images'
+augmented_images_folder='/mnt/e/Photos/TableStream/augmented_images'
+training_dataset_folder='/mnt/e/Photos/TableStream/training_images'
+
+
+def download_card_images(output_dir=card_images_folder):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
@@ -24,10 +29,13 @@ def download_card_images(output_dir='card_images'):
     response = requests.get(download_uri)
     cards = response.json()
 
+    # Filter out tokens
+    banned_layouts = {'token', 'double_faced_token', 'scheme', 'planar', 'vanguard','emblem','augment','host','art_series'}
+
     print('Downloading card images...')
     for card in cards:
-        # Filter out tokens
-        if card.get('layout') == 'token' or card.get('layout') == 'double_faced_token':
+        # Check if the card's layout is in the banned layouts
+        if card.get('layout') in banned_layouts:
             continue  # Skip tokens
 
         # Check if the card is legal in Commander
@@ -59,29 +67,11 @@ def download_card_images(output_dir='card_images'):
 
 
 
-def augment_images(input_dir='card_images', output_dir='augmented_images', num_augmented=10):
+def augment_images(input_dir=card_images_folder, output_dir=augmented_images_folder, num_augmented=10,num_strict_blurr=5, skip_augmenting_if_exists=False):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
     # Define augmentation transformations
-    # transform = A.Compose([
-    #     A.Resize(width=488, height=680),
-    #     A.RandomBrightnessContrast(p=0.5),
-    #     A.MotionBlur(blur_limit=5, p=0.5),
-    #     A.GaussNoise(var_limit=(10.0, 50.0), p=0.5),
-    #     A.Rotate(limit=90, p=0.3),
-    #     A.Blur(blur_limit=(3,11), p=0.75)
-    # ])
-
-    # transform = A.Compose([
-    #     A.Resize(width=488, height=680),
-    #     A.RandomBrightnessContrast(p=0.5),
-    #     A.MotionBlur(blur_limit=5, p=0.5),
-    #     A.GaussNoise(var_limit=(10.0, 50.0), p=0.5),
-    #     # A.Rotate(limit=90, p=0.3),
-    #     A.Blur(blur_limit=(3,11), p=0.75)
-    # ])
-
     transform = A.Compose([
         A.Resize(width=488, height=680),  # Resize to a fixed size for consistency
         A.ShiftScaleRotate(shift_limit=0.2, scale_limit=0.5, rotate_limit=0, p=0.7, border_mode=cv2.BORDER_CONSTANT),  # Shift and scale the card
@@ -93,12 +83,23 @@ def augment_images(input_dir='card_images', output_dir='augmented_images', num_a
         A.Blur(blur_limit=(3, 11), p=0.75)  # Apply a blur
     ])
 
+    transform_strict_blurr = A.Compose([
+        A.Resize(width=488, height=680),  # Resize to a fixed size for consistency
+        A.Downscale(scale_min=0.1, scale_max=0.25, p=1.0),
+        A.ImageCompression(quality_lower=5, quality_upper=10, p=1.0),
+        A.Blur(blur_limit=(3, 11), p=0.75)  # Apply a blur
+    ])
+
     count = 0
     total = len(os.listdir(input_dir))
     for filename in os.listdir(input_dir):
         # Save the original image with 'aug_99' appended to the filename
         original_output_filename = f"{os.path.splitext(filename)[0]}_aug_99.jpg"
         original_output_path = os.path.join(output_dir, original_output_filename)
+
+        if skip_augmenting_if_exists and os.path.exists(original_output_path):
+            print(f'Skipping {filename} because {original_output_filename} already exists.')
+            continue
         
         if not os.path.exists(original_output_path):
             image_path = os.path.join(input_dir, filename)
@@ -112,6 +113,16 @@ def augment_images(input_dir='card_images', output_dir='augmented_images', num_a
                 output_path = os.path.join(output_dir, output_filename)
                 cv2.imwrite(output_path, augmented_image)
                 #print(f'Saved augmented image {output_filename}')
+
+            # Perform strict blur augmentations, starting after regular augmentations
+            for j in range(num_strict_blurr):
+                augmented_blur = transform_strict_blurr(image=image)
+                augmented_image_blur = augmented_blur['image']
+                # The new index for the strict blur augmentations starts after the regular ones
+                output_filename_blur = f"{os.path.splitext(filename)[0]}_aug_{num_augmented + j}.jpg"
+                output_path_blur = os.path.join(output_dir, output_filename_blur)
+                cv2.imwrite(output_path_blur, augmented_image_blur)
+                #print(f'Saved strict blur augmented image {output_filename_blur}')
 
             cv2.imwrite(original_output_path, image)  # Save original image
             count = count + 1
@@ -197,6 +208,9 @@ def move_images(input_dir, output_dir, train_split=0.8):
     
     print("Images grouped by parent ID.")
 
+    count = 0
+    goal = len(images_by_parent_id)
+    print(goal)
     # Step 4: For each parent ID, split images into training and validation sets
     for parent_id, images in images_by_parent_id.items():
         random.shuffle(images)  # Randomize the augmentations
@@ -211,7 +225,8 @@ def move_images(input_dir, output_dir, train_split=0.8):
             # If we have more than 3 images, split based on train_split
             split_idx = max(1, split_idx)  # Ensure at least 1 for training
             val_images = images[split_idx:]
-            train_images = images[:split_idx]
+            #train_images = images[:split_idx]
+            train_images = images[:]
         else:
             # Handle edge case with 1 image
             train_images = images
@@ -231,17 +246,20 @@ def move_images(input_dir, output_dir, train_split=0.8):
         for img in train_images:
             src_path = os.path.join(input_dir, img)
             dest_path = os.path.join(train_parent_dir, img)
-            shutil.move(src_path, dest_path)
-            #shutil.copy2(src_path, dest_path)
-            print(f'Moved {img} to {train_parent_dir}')
+            #shutil.move(src_path, dest_path)
+            shutil.copy2(src_path, dest_path)
+            #print(f'Moved {img} to {train_parent_dir}')
     
         # Move validation images
         for img in val_images:
             src_path = os.path.join(input_dir, img)
             dest_path = os.path.join(val_parent_dir, img)
-            shutil.move(src_path, dest_path)
-            #shutil.copy2(src_path, dest_path)
-            print(f'Moved {img} to {val_parent_dir}')
+            #shutil.move(src_path, dest_path)
+            shutil.copy2(src_path, dest_path)
+            #print(f'Moved {img} to {val_parent_dir}')
+
+        count = count +1
+        print(f"{count}/{goal} copied")
     
     print("Image moving complete.")
 
@@ -250,7 +268,7 @@ def move_images(input_dir, output_dir, train_split=0.8):
 
 def create_mappings():
     # Define the path to your training/validation dataset (use the root folder where the class folders are stored)
-    dataset_path = 'classified_images/train'  # Replace with your actual dataset path
+    dataset_path = f"{training_dataset_folder}/train"  # Replace with your actual dataset path
     output_file = 'class_to_idx.json'      # Output file to save the mapping
 
     # Load the dataset using ImageFolder
@@ -276,162 +294,12 @@ def create_mappings():
 
 
 
-def augment_and_split_images(input_dir='card_images', output_dir='output_data', num_augmented=10, train_split=0.8):
-    # Create base directories for training and validation
-    train_dir = os.path.join(output_dir, 'train')
-    val_dir = os.path.join(output_dir, 'val')
-    os.makedirs(train_dir, exist_ok=True)
-    os.makedirs(val_dir, exist_ok=True)
-    
-    # Define augmentation transformations
-    transform = A.Compose([
-        A.Resize(width=488, height=680),
-        A.RandomBrightnessContrast(p=0.5),
-        A.MotionBlur(blur_limit=5, p=0.5),
-        A.GaussNoise(var_limit=(10.0, 50.0), p=0.5),
-        # A.Rotate(limit=90, p=0.3),
-        A.Blur(blur_limit=(3,11), p=0.75)
-    ])
-    
-    # Step 1: Download Scryfall card data
-    print("Downloading Scryfall default_cards data...")
-    response = requests.get('https://api.scryfall.com/bulk-data/default_cards')
-    if response.status_code != 200:
-        print("Failed to download Scryfall data")
-        return
-    
-    bulk_data_url = response.json()['download_uri']
-    bulk_response = requests.get(bulk_data_url)
-    if bulk_response.status_code != 200:
-        print("Failed to download bulk card data")
-        return
-    
-    cards_data = bulk_response.json()
-    print("Scryfall data loaded successfully.")
-    
-    # Step 2: Build mapping from card IDs to their parent Oracle IDs
-    card_id_to_oracle_id = {}
-    for card in cards_data:
-        card_id = card['id']
-        oracle_id = card.get('oracle_id', card_id)  # Use card ID if oracle_id is not available
-        card_id_to_oracle_id[card_id] = oracle_id
-    
-    print("Card ID to Oracle ID mapping created.")
-    
-    # Dictionary to keep track of the number of images per Oracle ID
-    oracle_id_image_counts = {}
-    
-    # Step 3: Process each image
-    for filename in os.listdir(input_dir):
-        if filename.endswith(('.jpg', '.png', '.jpeg')):  # Adjust for other image types if needed
-            image_path = os.path.join(input_dir, filename)
-            image = cv2.imread(image_path)
-            if image is None:
-                print(f"Failed to read image {filename}. Skipping.")
-                continue
-            
-            # Extract the card ID from the filename
-            primary_id = filename.split('_aug')[0]
-            # Map the card ID to its Oracle ID
-            oracle_id = card_id_to_oracle_id.get(primary_id, primary_id)
-            
-            # Initialize the image count for this Oracle ID if not already done
-            if oracle_id not in oracle_id_image_counts:
-                oracle_id_image_counts[oracle_id] = 0
-            
-            # Check how many images already exist for this Oracle ID
-            total_images_for_oracle = oracle_id_image_counts[oracle_id]
-            
-            # If there are already 50 or more images, reduce num_augmented to 1
-            if total_images_for_oracle >= 50:
-                current_num_augmented = 1
-            else:
-                current_num_augmented = num_augmented
-                # # Adjust current_num_augmented if adding num_augmented would exceed 50 images
-                # if total_images_for_oracle + num_augmented > 50:
-                #     current_num_augmented = 50 - total_images_for_oracle
-            
-            # Create a temporary list to hold augmented images for this card
-            augmented_images = []
-            
-            # Save the original image with '_aug_99' appended to the filename
-            original_output_filename = f"{primary_id}_aug_99.jpg"
-            augmented_images.append((original_output_filename, image))
-            oracle_id_image_counts[oracle_id] += 1
-            
-            # Perform augmentations and save augmented images
-            for i in range(current_num_augmented):
-                augmented = transform(image=image)
-                augmented_image = augmented['image']
-                output_filename = f"{primary_id}_aug_{i}.jpg"
-                augmented_images.append((output_filename, augmented_image))
-                oracle_id_image_counts[oracle_id] += 1
-            
-            # Save augmented images into a temporary directory organized by Oracle ID
-            temp_oracle_dir = os.path.join(output_dir, 'temp', oracle_id)
-            os.makedirs(temp_oracle_dir, exist_ok=True)
-            
-            for img_name, img_data in augmented_images:
-                output_path = os.path.join(temp_oracle_dir, img_name)
-                cv2.imwrite(output_path, img_data)
-                print(f"Saved {img_name} to {temp_oracle_dir}")
-    
-    print("Augmentation complete. Starting train/validation split...")
-    
-    # Step 4: Split images into training and validation sets per Oracle ID
-    temp_dir = os.path.join(output_dir, 'temp')
-    for oracle_id in os.listdir(temp_dir):
-        oracle_dir = os.path.join(temp_dir, oracle_id)
-        images = [img for img in os.listdir(oracle_dir) if img.endswith(('.jpg', '.png', '.jpeg'))]
-        random.shuffle(images)
-        total_images = len(images)
-        split_idx = int(total_images * train_split)
-        
-        # Ensure at least 1 image in both train and val, especially for small datasets
-        if total_images == 3:
-            train_images = images[:2]  # 2 images for training
-            val_images = images[2:]    # 1 image for validation
-        elif total_images > 1:
-            split_idx = max(1, split_idx)  # Ensure at least 1 for training
-            train_images = images[:split_idx]
-            val_images = images[split_idx:]
-        else:
-            train_images = images
-            val_images = []
-        
-        # Create directories for this Oracle ID in the training and validation subfolders
-        train_oracle_dir = os.path.join(train_dir, oracle_id)
-        val_oracle_dir = os.path.join(val_dir, oracle_id)
-        os.makedirs(train_oracle_dir, exist_ok=True)
-        os.makedirs(val_oracle_dir, exist_ok=True)
-        
-        # Move training images
-        for img in train_images:
-            src_path = os.path.join(oracle_dir, img)
-            dest_path = os.path.join(train_oracle_dir, img)
-            shutil.move(src_path, dest_path)
-            print(f"Moved {img} to {train_oracle_dir}")
-        
-        # Move validation images
-        for img in val_images:
-            src_path = os.path.join(oracle_dir, img)
-            dest_path = os.path.join(val_oracle_dir, img)
-            shutil.move(src_path, dest_path)
-            print(f"Moved {img} to {val_oracle_dir}")
-        
-        # Remove the temporary Oracle ID directory
-        os.rmdir(oracle_dir)
-    
-    # Remove the temporary directory
-    os.rmdir(temp_dir)
-    print("Image splitting complete.")
 
 #download_card_images()
-#augment_images('card_images','augmented_images',15)
-#move_images('augmented_images', 'classified_images')
+#augment_images(card_images_folder,augmented_images_folder,15,4, True) check this as we just added blurrr
+#move_images(augmented_images_folder, training_dataset_folder)
 #generate_annotations()
 create_mappings()
-
 # augment_and_split_images(
 #     input_dir='card_images',
 #     output_dir='classified_images',
