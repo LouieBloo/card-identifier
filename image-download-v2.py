@@ -93,12 +93,12 @@ def augment_images(input_dir=card_images_folder, output_dir=augmented_images_fol
     count = 0
     total = len(os.listdir(input_dir))
     for filename in os.listdir(input_dir):
-        # Save the original image with 'aug_99' appended to the filename
-        original_output_filename = f"{os.path.splitext(filename)[0]}_aug_99.jpg"
+        # Save the original image with 'aug_999999' appended to the filename
+        original_output_filename = f"{os.path.splitext(filename)[0]}_aug_999999.jpg"
         original_output_path = os.path.join(output_dir, original_output_filename)
 
         if skip_augmenting_if_exists and os.path.exists(original_output_path):
-            print(f'Skipping {filename} because {original_output_filename} already exists.')
+            #print(f'Skipping {filename} because {original_output_filename} already exists.')
             continue
         
         if not os.path.exists(original_output_path):
@@ -202,12 +202,17 @@ def move_images(input_dir, output_dir, train_split=0.8):
             primary_id = filename.split('_aug')[0]
             # Map the card ID to its parent ID
             parent_id = card_id_to_parent_id.get(primary_id, primary_id)  # Default to primary_id if not found
+
+            # verify this image is not already in the training folder, dont add it if it is
+            if os.path.exists(training_dataset_folder + "/train/" + parent_id + "/" + filename):
+                #print(f'Skipping {filename}')
+                continue
+
             if parent_id not in images_by_parent_id:
                 images_by_parent_id[parent_id] = []
             images_by_parent_id[parent_id].append(filename)
     
     print("Images grouped by parent ID.")
-
     count = 0
     goal = len(images_by_parent_id)
     print(goal)
@@ -219,14 +224,15 @@ def move_images(input_dir, output_dir, train_split=0.8):
     
         # Ensure at least 1 image in both train and val, especially for small datasets
         if total_images == 3:
-            train_images = images[:2]  # 2 images for training
+            #train_images = images[:2]  # 2 images for training
+            train_images = images[:] #notice we use all in training
             val_images = images[2:]    # 1 image for validation
         elif total_images > 1:
             # If we have more than 3 images, split based on train_split
             split_idx = max(1, split_idx)  # Ensure at least 1 for training
             val_images = images[split_idx:]
             #train_images = images[:split_idx]
-            train_images = images[:]
+            train_images = images[:] #notice we use all in training
         else:
             # Handle edge case with 1 image
             train_images = images
@@ -294,12 +300,18 @@ def create_mappings():
 
 
 
-
+#Step 1
 #download_card_images()
-#augment_images(card_images_folder,augmented_images_folder,15,4, True) check this as we just added blurrr
-#move_images(augmented_images_folder, training_dataset_folder)
+
+#Step 2
+#augment_images(card_images_folder,augmented_images_folder,15,4, True)
+
+#Step 3
+move_images(augmented_images_folder, training_dataset_folder)
+
+
 #generate_annotations()
-create_mappings()
+#create_mappings()
 # augment_and_split_images(
 #     input_dir='card_images',
 #     output_dir='classified_images',
