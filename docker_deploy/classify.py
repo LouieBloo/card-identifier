@@ -130,6 +130,14 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
     x1, y1, x2, y2, _, _ = closest_box
     card_image = image[int(y1):int(y2), int(x1):int(x2)]
 
+    # for front end
+    bounding_box = {
+        "x1": int(x1),
+        "y1": int(y1),
+        "x2": int(x2),
+        "y2": int(y2)
+    }
+
     # Ensure the image has 3 channels (RGB)
     if len(card_image.shape) == 2:  # Grayscale (1 channel), convert to 3-channel grayscale
         card_image = cv2.cvtColor(card_image, cv2.COLOR_GRAY2RGB)
@@ -185,7 +193,8 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
         "detected_card": predicted_scryfall_id,
         "classification_confidence": confidence.item(),
         "scryfall_data": scryfall_data,
-        "card_image_base64": card_image_base64
+        "card_image_base64": card_image_base64,
+        "bounding_box": bounding_box
     }
 
 @app.get("/")
