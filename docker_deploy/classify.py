@@ -97,10 +97,12 @@ class ClickLocation(BaseModel):
 async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...), y: float = Form(...)):
     # Read image from the uploaded file
     image_data = await file.read()
-    image = Image.open(BytesIO(image_data))
-    width, height = image.size
-    image = np.array(image)
-    
+    # Always convert to RGB
+    with Image.open(BytesIO(image_data)) as pil_image:
+        print("Image mode:", pil_image.mode)
+        pil_image = pil_image.convert("RGB")
+        width, height = pil_image.size
+        image = np.array(pil_image)
 
     # Step 1: Use YOLOv5 model to detect cards in the image
     results = yolov5_model(image)
@@ -113,10 +115,10 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
     # Step 4: Loop through detections and print the coordinates of each detected object
     for i, detection in enumerate(detections):
         x1, y1, x2, y2, confidence, class_id = detection
-        print(f"Object {i + 1}:")
-        print(f"  Coordinates: ({x1}, {y1}) to ({x2}, {y2})")
-        print(f"  Confidence: {confidence}")
-        print(f"  Class ID: {class_id}")
+        # print(f"Object {i + 1}:")
+        # print(f"  Coordinates: ({x1}, {y1}) to ({x2}, {y2})")
+        # print(f"  Confidence: {confidence}")
+        # print(f"  Class ID: {class_id}")
 
     # Step 2: Find the closest bounding box to the user's click location
     if x and y:
@@ -171,30 +173,54 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
     # Run classification
     with torch.no_grad():
         output = classification_model(card_image_tensor)
-        print(f"Model output: {output}")
+        # print(f"Model output: {output}")
         probabilities = torch.nn.functional.softmax(output, dim=1)
-        confidence, predicted_class = torch.max(probabilities, 1)
-        print(f"Confidence: {confidence.item()}, Predicted class index: {predicted_class.item()}")
-        predicted_class = predicted_class.item()
+        #confidence, predicted_class = torch.max(probabilities, 1)
+        #print(f"Confidence: {confidence.item()}, Predicted class index: {predicted_class.item()}")
+        #predicted_class = predicted_class.item()
+
+        # Get the top 3 predictions
+        top_k = 3
+        top_probabilities, top_indices = torch.topk(probabilities, top_k)
+
+        # Convert to Python types for easier manipulation
+        top_probabilities = top_probabilities.squeeze().tolist()
+        top_indices = top_indices.squeeze().tolist()
+
+        # Map indices to class names and Scryfall IDs
+        top_guesses = []
+        for i in range(top_k):
+            predicted_class = top_indices[i]
+            confidence = top_probabilities[i]
+
+            # Get Scryfall ID for the predicted class
+            predicted_scryfall_id = idx_to_class.get(str(predicted_class), None)
+
+            #scryfall card
+            scryfall_data = fetch_card_details_by_id(predicted_scryfall_id)
+
+            # Add the prediction to the top_guesses list
+            top_guesses.append({
+                "confidence": confidence,
+                "predicted_scryfall_id": predicted_scryfall_id,
+                "scryfall_data" : scryfall_data
+            })
         
 
-    print(f"predicted_class: {predicted_class}")
-    predicted_scryfall_id = idx_to_class.get(str(predicted_class), None)
-    print(f"predicted_scryfall_id: {predicted_scryfall_id}")
+    predicted_scryfall_id = top_guesses[0]["predicted_scryfall_id"] if top_guesses else None
+    confidence = top_guesses[0]["confidence"] if top_guesses else None
 
     if predicted_scryfall_id is None:
         return {"error": "Predicted class index not mapped to any Scryfall ID"}
 
-    # Step 4: Fetch card details from Scryfall
-    scryfall_data = fetch_card_details_by_id(predicted_scryfall_id)
-
     # Return the result
     return {
         "detected_card": predicted_scryfall_id,
-        "classification_confidence": confidence.item(),
-        "scryfall_data": scryfall_data,
+        "classification_confidence": confidence,
+        "scryfall_data": top_guesses[0]["scryfall_data"],
         "card_image_base64": card_image_base64,
-        "bounding_box": bounding_box
+        "bounding_box": bounding_box,
+        "top_guesses": top_guesses
     }
 
 @app.get("/")
