@@ -16,7 +16,7 @@ import json
 import base64
 
 yolo5ModelName='best.pt'
-classifierModelName='magic_card_classifier_v4.pth'
+classifierModelName='magic_card_classifier_v5.pth'
 
 print(f"Classifier name: {classifierModelName}")
 

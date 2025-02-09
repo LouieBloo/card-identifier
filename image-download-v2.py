@@ -307,7 +307,10 @@ def create_mappings():
 #augment_images(card_images_folder,augmented_images_folder,15,4, True)
 
 #Step 3
-move_images(augmented_images_folder, training_dataset_folder)
+#move_images(augmented_images_folder, training_dataset_folder)
+
+#Step 4 
+create_mappings()
 
 
 #generate_annotations()

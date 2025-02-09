@@ -12,7 +12,7 @@ print("hello")
 
 # Define the path to save checkpoints
 checkpoint_path = 'model_checkpoint.pth'
-output_model_name = 'magic_card_classifier_v4.pth'
+output_model_name = 'magic_card_classifier_v5.pth'
 training_folder = "/mnt/e/Photos/TableStream/training_images"
 
 # Initialize variables
@@ -26,13 +26,13 @@ train_transforms = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406],
                          [0.229, 0.224, 0.225])
 ])
-print("hello1")
+
 train_dataset = datasets.ImageFolder(f'{training_folder}/train', transform=train_transforms)
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
-print("hello2")
+
 val_dataset = datasets.ImageFolder(f'{training_folder}/val', transform=train_transforms)
 val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
-print("hello3")
+
 num_classes = len(train_dataset.classes)
 
 print(f'Class Amount: {num_classes}')
