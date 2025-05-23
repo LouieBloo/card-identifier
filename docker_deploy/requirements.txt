@@ -58,7 +58,7 @@ python-multipart==0.0.12
 requests==2.32.3
 # scikit-image==0.24.0
 # scipy==1.13.1
-# seaborn==0.13.2
+seaborn==0.13.2
 # shapely==2.0.6
 # six==1.16.0
 # smmap==5.0.1
