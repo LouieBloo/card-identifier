@@ -1,6 +1,5 @@
 uvicorn classify:app --reload
-python train.py --img 640 --batch 32 --epochs 5 --data data.yaml --weights yolov5s.pt
-
+python train.py --img 640 --batch 32 --epochs 100 --data data.yaml --weights yolov5s.pt
 
 
 <div align="center">
