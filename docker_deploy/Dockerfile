@@ -8,6 +8,7 @@ WORKDIR /app
 # Install system dependencies (e.g., OpenCV, wget)
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
+    libglib2.0-0 \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
