@@ -13,10 +13,9 @@ from typing import List, Tuple
 from torchvision.datasets import ImageFolder
 from torchvision import transforms
 import json
-import base64
 
 yolo5ModelName='best.pt'
-classifierModelName='magic_card_classifier_v8.pth'
+classifierModelName='magic_card_classifier_v4.pth'
 
 print(f"Classifier name: {classifierModelName}")
 
@@ -97,12 +96,10 @@ class ClickLocation(BaseModel):
 async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...), y: float = Form(...)):
     # Read image from the uploaded file
     image_data = await file.read()
-    # Always convert to RGB
-    with Image.open(BytesIO(image_data)) as pil_image:
-        print("Image mode:", pil_image.mode)
-        pil_image = pil_image.convert("RGB")
-        width, height = pil_image.size
-        image = np.array(pil_image)
+    image = Image.open(BytesIO(image_data))
+    width, height = image.size
+    image = np.array(image)
+    
 
     # Step 1: Use YOLOv5 model to detect cards in the image
     results = yolov5_model(image)
@@ -115,10 +112,10 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
     # Step 4: Loop through detections and print the coordinates of each detected object
     for i, detection in enumerate(detections):
         x1, y1, x2, y2, confidence, class_id = detection
-        # print(f"Object {i + 1}:")
-        # print(f"  Coordinates: ({x1}, {y1}) to ({x2}, {y2})")
-        # print(f"  Confidence: {confidence}")
-        # print(f"  Class ID: {class_id}")
+        print(f"Object {i + 1}:")
+        print(f"  Coordinates: ({x1}, {y1}) to ({x2}, {y2})")
+        print(f"  Confidence: {confidence}")
+        print(f"  Class ID: {class_id}")
 
     # Step 2: Find the closest bounding box to the user's click location
     if x and y:
@@ -132,92 +129,48 @@ async def classify_magic_card(file: UploadFile = File(...), x: float = Form(...)
     x1, y1, x2, y2, _, _ = closest_box
     card_image = image[int(y1):int(y2), int(x1):int(x2)]
 
-    # for front end
-    bounding_box = {
-        "x1": int(x1),
-        "y1": int(y1),
-        "x2": int(x2),
-        "y2": int(y2)
-    }
-
     # Ensure the image has 3 channels (RGB)
     if len(card_image.shape) == 2:  # Grayscale (1 channel), convert to 3-channel grayscale
         card_image = cv2.cvtColor(card_image, cv2.COLOR_GRAY2RGB)
     elif card_image.shape[2] == 4:  # If 4 channels (e.g., RGBA), convert to RGB
         card_image = cv2.cvtColor(card_image, cv2.COLOR_RGBA2RGB)
 
+    cropped_image_path = 'cropped_card_image.jpg'
+    cv2.imwrite('cropped_card_image.jpg', cv2.cvtColor(card_image, cv2.COLOR_RGB2BGR))  # Save as JPEG
 
-    #cv2.imwrite('cropped_card_image1.jpg', cv2.cvtColor(card_image, cv2.COLOR_RGB2BGR))  # Save as JPEG
+    _, img_encoded = cv2.imencode('.jpg', cv2.cvtColor(card_image, cv2.COLOR_RGB2BGR))
+    img_bytes = img_encoded.tobytes()
 
-    # Convert cropped card image to a base64 string
-    _, buffer = cv2.imencode('.jpg', cv2.cvtColor(card_image, cv2.COLOR_RGB2BGR))
-    card_image_base64 = base64.b64encode(buffer).decode('utf-8')
+    # Step 2: Send the encoded image to the external endpoint
+    try:
+        files = {
+            'file': ('cropped_card_image.jpg', img_bytes, 'image/jpeg')
+        }
+        response = requests.post(
+            "https://6c08-97-120-116-121.ngrok-free.app/match",
+            files=files
+        )
+        print('Response status code:', response.status_code)
+        print('Response content:', response.content)
 
-    # Step 3: Preprocess the extracted card image and run it through your classification model
-    # Resize and normalize the image for EfficientNet (assuming 224x224 input size)
-    card_image = cv2.resize(card_image, (224, 224))  # Example size, adjust as necessary
+        if response.status_code == 200:
+            print("Successfully sent image to external endpoint.")
+            external_data = response.json()  # Assuming the response is JSON
+        else:
+            print("Failed to send image to external endpoint.")
+            external_data = {"error": "Failed to process image"}
+    except Exception as e:
+        print(f"Error sending image to external endpoint: {e}")
+        external_data = {"error": str(e)}
 
-    # Define the preprocessing pipeline
-    preprocess = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize(224),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                            std=[0.229, 0.224, 0.225]),
-    ])
-
-    # Apply preprocessing to the card image
-    card_image_tensor = preprocess(card_image).unsqueeze(0)  # Add batch dimension
-    #card_image_tensor = torch.from_numpy(card_image).permute(2, 0, 1).unsqueeze(0).float() / 255.0  # Normalize to [0, 1]
-    # Run classification
-    with torch.no_grad():
-        output = classification_model(card_image_tensor)
-        # print(f"Model output: {output}")
-        probabilities = torch.nn.functional.softmax(output, dim=1)
-        #confidence, predicted_class = torch.max(probabilities, 1)
-        #print(f"Confidence: {confidence.item()}, Predicted class index: {predicted_class.item()}")
-        #predicted_class = predicted_class.item()
-
-        # Get the top 3 predictions
-        top_k = 3
-        top_probabilities, top_indices = torch.topk(probabilities, top_k)
-
-        # Convert to Python types for easier manipulation
-        top_probabilities = top_probabilities.squeeze().tolist()
-        top_indices = top_indices.squeeze().tolist()
-
-        # Map indices to class names and Scryfall IDs
-        top_guesses = []
-        for i in range(top_k):
-            predicted_class = top_indices[i]
-            confidence = top_probabilities[i]
-
-            # Get Scryfall ID for the predicted class
-            predicted_scryfall_id = idx_to_class.get(str(predicted_class), None)
-            #scryfall card
-            scryfall_data = fetch_card_details_by_id(predicted_scryfall_id)
-            # Add the prediction to the top_guesses list
-            top_guesses.append({
-                "confidence": confidence,
-                "predicted_scryfall_id": predicted_scryfall_id,
-                "scryfall_data" : scryfall_data
-            })
-        
-    predicted_scryfall_id = top_guesses[0]["predicted_scryfall_id"] if top_guesses else None
-    confidence = top_guesses[0]["confidence"] if top_guesses else None
-
-    if predicted_scryfall_id is None:
-        return {"error": "Predicted class index not mapped to any Scryfall ID"}
+    # Step 4: Fetch card details from Scryfall
+    scryfall_data = None
 
     # Return the result
     return {
-        "detected_card": predicted_scryfall_id,
-        "classification_confidence": confidence,
-        "scryfall_data": top_guesses[0]["scryfall_data"],
-        "card_image_base64": card_image_base64,
-        "bounding_box": bounding_box,
-        "top_guesses": top_guesses
+        "detected_card": None,
+        "classification_confidence": confidence.item(),
+        "scryfall_data": scryfall_data
     }
 
 @app.get("/")
