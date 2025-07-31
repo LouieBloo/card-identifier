@@ -2,7 +2,9 @@
 # --- Model File Paths ---
 YOLO_MODEL_PATH = 'best.pt'
 CNN_CLASSIFIER_MODEL_PATH = 'magic_card_classifier_v8.pth'
+CNN_CLASSIFIER_MODEL_PATH_V2 = 'magic_card_classifier_efficientnet_v2.pth'
 CLASS_MAPPING_PATH = 'class_to_idx.json'
+CLASS_MAPPING_PATH_V2 = 'class_to_idx_v2.json'
 
 # --- OpenSearch Configuration ---
 OPENSEARCH_HOST = "localhost"
