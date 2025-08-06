@@ -25,7 +25,7 @@ BATCH_SIZE = 128
 # The number of CPU cores to use for data loading.
 NUM_WORKERS = 4
 # Total number of epochs to train for
-NUM_EPOCHS = 3
+NUM_EPOCHS = 4
 # Learning rate for the optimizer
 LEARNING_RATE = 0.001
 # How often to save an interim checkpoint (in number of batches)
