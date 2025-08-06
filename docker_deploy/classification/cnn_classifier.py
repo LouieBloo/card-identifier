@@ -38,6 +38,10 @@ class CNNClassifier:
         top_probs = top_probs.squeeze().tolist()
         top_indices = top_indices.squeeze().tolist()
 
+        if not isinstance(top_probs, list):
+            top_probs = [top_probs]
+            top_indices = [top_indices]
+
         guesses = []
         for i in range(config.CNN_TOP_K):
             idx = str(top_indices[i])

@@ -9,7 +9,8 @@ from io import BytesIO
 from services.yolo_slicer import YoloSlicer
 from services import scryfall_client
 from classification.cnn_classifier import CNNClassifier
-from classification.knn_searcher import KNNSearcher
+from classification.cnn_classifier_v2 import CNNClassifierV2
+# from classification.knn_searcher import KNNSearcher
 
 # --- FastAPI App Initialization ---
 app = FastAPI(title="Magic Card Classifier API")
@@ -26,7 +27,8 @@ app.add_middleware(
 # These are loaded once when the application starts, which is efficient.
 slicer = YoloSlicer()
 cnn_classifier = CNNClassifier()
-knn_searcher = KNNSearcher()
+cnn_classifier_v2 = CNNClassifierV2()
+#knn_searcher = KNNSearcher()
 # --- End Initialization ---
 
 @app.get("/")
@@ -64,10 +66,13 @@ async def classify_magic_card(
     # Step 2: Classify using the selected method
     if useKNN:
         # Use OpenSearch k-NN Searcher
-        print("Using knn")
-        initial_guesses = knn_searcher.search_by_image(cropped_image)
+        print("Using knn b")
+        # initial_guesses = knn_searcher.search_by_image(cropped_image)
+        # print(initial_guesses)
+        # id_fetcher = scryfall_client.fetch_card_by_scryfall_id
+        initial_guesses = cnn_classifier_v2.classify_card(cropped_image)
         print(initial_guesses)
-        id_fetcher = scryfall_client.fetch_card_by_scryfall_id
+        id_fetcher = scryfall_client.fetch_card_by_oracle_id
     else:
         # Use local CNN Classifier
         initial_guesses = cnn_classifier.classify_card(cropped_image)
@@ -82,10 +87,8 @@ async def classify_magic_card(
     for guess in initial_guesses:
         scryfall_data = id_fetcher(guess['predicted_id'])
         if "error" not in scryfall_data:
-            top_guesses_hydrated.append({
-                "confidence": guess['confidence'],
-                "scryfall_data": scryfall_data
-            })
+            scryfall_data['classification_confidence'] = guess['confidence']
+            top_guesses_hydrated.append(scryfall_data)
             
     if not top_guesses_hydrated:
         raise HTTPException(status_code=404, detail="Could not fetch card details from Scryfall for any guess.")
@@ -95,7 +98,7 @@ async def classify_magic_card(
         "search_method": "k-NN" if useKNN else "CNN",
         "bounding_box": bounding_box,
         "card_image_base64": card_image_base64,
-        "classification_confidence" : top_guesses_hydrated[0]['confidence'],
-        "scryfall_data": top_guesses_hydrated[0]['scryfall_data'],
+        "classification_confidence" : top_guesses_hydrated[0]['classification_confidence'],
+        "scryfall_data": top_guesses_hydrated[0],
         "all_guesses": top_guesses_hydrated
     }
